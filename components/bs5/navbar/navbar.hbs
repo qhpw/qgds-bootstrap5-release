@@ -35,7 +35,7 @@
                 {{#if dropdown_enabled}}
                 <li class="nav-item dropdown">
                     <!-- Desktop primary dropdown style and behaviour -->
-                    <a class="nav-link dropdown-toggle desktop-only{{#if (eq assetid current_page_id)}} active{{/if}}" href="{{target_url}}" id="menuDropdown"
+                    <a class="nav-link dropdown-toggle desktop-only" href="{{target_url}}" id="menuDropdown"
                         role="button" aria-controls="" data-bs-toggle="dropdown" aria-expanded="false"
                         aria-label="Toggle navigation">
                         {{title}}
@@ -163,7 +163,7 @@
                 </li>
                 {{else}}
                 <li class="nav-item">
-                    <a class="nav-link{{#if (eq assetid current_page_id)}} active{{/if}}" href="{{target_url}}">{{title}}</a>
+                    <a class="nav-link {{assetid}} {{current_page_id)}} {{is_active}}" href="{{target_url}}">{{title}}</a>
                 </li>
                 {{/if}}
                 {{/each }}
