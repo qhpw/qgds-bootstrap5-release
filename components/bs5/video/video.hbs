@@ -40,9 +40,11 @@
         </div>
     </div>
 
+    {{#if description}}
     <div class="video-description">
         {{{ description }}}
     </div>
+    {{/if}}
 
     {{! Render the transcript content in an accordion template }}
     {{#if transcriptContent}}
