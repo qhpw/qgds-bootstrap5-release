@@ -4,4 +4,8 @@ This repository provides a bundled CSS/JS
 
 See https://qld-gov-au.github.io/qgds-bootstrap5/ for source repository
 
-This repo is also used to deploy to CDN domains.Building Queenslander's Future
+This repo is also used to deploy to CDN domains.
+
+## About this branch
+
+Adding necessary template for Building Queenslander's Future site.
