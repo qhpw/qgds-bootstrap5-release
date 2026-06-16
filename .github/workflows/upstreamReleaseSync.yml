@@ -1,0 +1,91 @@
+name: Upstream release sync
+
+# Follows upstream's latest RELEASE TAG, not a branch.
+# Runs weekly. When our `main` is behind the latest upstream release tag,
+# it builds a sync branch. Opening the PR is currently MANUAL.
+#
+# ── To switch to automatic PRs once an admin grants Actions PR perms ──
+#   1. Uncomment the `pull-requests: write` line below.
+#   2. Uncomment the whole "Open PR into main" step at the bottom.
+#   (Repo setting also required: Settings → Actions → General →
+#    Workflow permissions → "Read and write" + allow Actions to create PRs.)
+
+on:
+  schedule:
+    - cron: '0 22 * * 0'    # Sunday 22:00 UTC = Monday ~08:00 Brisbane
+  workflow_dispatch:         # lets you run it on demand from the Actions tab
+
+permissions:
+  contents: write
+  # pull-requests: write     # ← UNCOMMENT to enable automatic PRs
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out OUR main — the clean upstream mirror / tracking branch
+      - name: Checkout our main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0           # full history, needed for ancestor check + merge
+
+      # 2. Register upstream and fetch its tags
+      - name: Fetch upstream tags
+        run: |
+          git remote add upstream https://github.com/qld-gov-au/qgds-bootstrap5-release.git || true
+          git fetch upstream --tags --force
+
+      # 3. Work out the latest upstream RELEASE tag (vX.Y.Z), ignore non-release tags
+      - name: Find latest upstream release tag
+        id: latest
+        run: |
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest upstream release tag: $LATEST"
+
+      # 4.the key check — avoids empty work)
+      - name: Is our main already up to date?
+        id: check
+        run: |
+          TAG="${{ steps.latest.outputs.tag }}"
+          if git merge-base --is-ancestor "$TAG" origin/main; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "main already contains $TAG — nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "main is behind $TAG — will sync."
+          fi
+
+      # 5. Build/update a sync branch pointing at that release tag
+      #    (Manual mode: this branch is pushed; you open the PR by hand in the
+      #     GitHub web UI — the repo home page shows a "Compare & pull request" banner.)
+      - name: Build sync branch at the release tag
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TAG="${{ steps.latest.outputs.tag }}"
+          git checkout -B "sync/upstream-${TAG}" "$TAG"
+          git push origin "sync/upstream-${TAG}" --force
+
+      # 6. Open (or update) the review PR into main  ── AUTOMATIC PR (disabled for now)
+      #    UNCOMMENT this whole step (and the permission line above) to enable.
+      # - name: Open PR into main
+      #   if: steps.check.outputs.changed == 'true'
+      #   uses: peter-evans/create-pull-request@v6
+      #   with:
+      #     base: main
+      #     branch: sync/upstream-${{ steps.latest.outputs.tag }}
+      #     title: "Upstream release sync -> ${{ steps.latest.outputs.tag }}"
+      #     body: |
+      #       Sync `main` up to upstream release **${{ steps.latest.outputs.tag }}**.
+      #
+      #       **Before merging - data-contract check:**
+      #       - [ ] navbar - still `currentPage` (not `is_active`)?
+      #       - [ ] globalAlert - still `alertItems[]`?
+      #       - [ ] banner - `title` / `content` / `image.url` / `ctabuttons` / `variantClass` unchanged?
+      #       - [ ] Any change to a file we customise? (`navbar.hbs`, `video.hbs`)
+      #
+      #       Merging only updates `main`. Live sites are unaffected (they run off a `hpw_vN` tag).
+      #       Our customisations are merged in later, when assembling the release.
