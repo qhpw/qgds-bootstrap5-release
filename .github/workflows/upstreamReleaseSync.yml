@@ -1,12 +1,16 @@
 name: Upstream release sync
 
 # Follows upstream's latest RELEASE TAG, not a branch.
-# Runs weekly. When our `main` is behind the latest upstream release tag,
-# it builds a sync branch. Opening the PR is currently MANUAL.
+# Target branch is `upstream-tracking` — a CLEAN branch created from an
+# upstream release tag (the old main/develop have rewritten history and
+# are not reliable mirrors, so we don't use them here).
+#
+# Runs weekly. When `upstream-tracking` is behind the latest upstream
+# release tag, it builds a sync branch. Opening the PR is currently MANUAL.
 #
 # ── To switch to automatic PRs once an admin grants Actions PR perms ──
 #   1. Uncomment the `pull-requests: write` line below.
-#   2. Uncomment the whole "Open PR into main" step at the bottom.
+#   2. Uncomment the whole "Open PR" step at the bottom.
 #   (Repo setting also required: Settings → Actions → General →
 #    Workflow permissions → "Read and write" + allow Actions to create PRs.)
 
@@ -23,11 +27,11 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      # 1. Check out OUR main — the clean upstream mirror / tracking branch
-      - name: Checkout our main
+      # 1. Check out our clean tracking branch
+      - name: Checkout upstream-tracking
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: upstream-tracking
           fetch-depth: 0           # full history, needed for ancestor check + merge
 
       # 2. Register upstream and fetch its tags
@@ -44,17 +48,18 @@ jobs:
           echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
           echo "Latest upstream release tag: $LATEST"
 
-      # 4.the key check — avoids empty work)
-      - name: Is our main already up to date?
+      # 4. Do we already have it? (the key check — avoids empty/no-op work)
+      #    Reliable here because upstream-tracking is a clean, linear branch.
+      - name: Is upstream-tracking already up to date?
         id: check
         run: |
           TAG="${{ steps.latest.outputs.tag }}"
-          if git merge-base --is-ancestor "$TAG" origin/main; then
+          if git merge-base --is-ancestor "$TAG" origin/upstream-tracking; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "main already contains $TAG — nothing to do."
+            echo "upstream-tracking already contains $TAG — nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "main is behind $TAG — will sync."
+            echo "upstream-tracking is behind $TAG — will sync."
           fi
 
       # 5. Build/update a sync branch pointing at that release tag
@@ -69,17 +74,17 @@ jobs:
           git checkout -B "sync/upstream-${TAG}" "$TAG"
           git push origin "sync/upstream-${TAG}" --force
 
-      # 6. Open (or update) the review PR into main  ── AUTOMATIC PR (disabled for now)
+      # 6. Open (or update) the review PR into upstream-tracking ── AUTOMATIC PR (disabled for now)
       #    UNCOMMENT this whole step (and the permission line above) to enable.
-      # - name: Open PR into main
+      # - name: Open PR into upstream-tracking
       #   if: steps.check.outputs.changed == 'true'
       #   uses: peter-evans/create-pull-request@v6
       #   with:
-      #     base: main
+      #     base: upstream-tracking
       #     branch: sync/upstream-${{ steps.latest.outputs.tag }}
       #     title: "Upstream release sync -> ${{ steps.latest.outputs.tag }}"
       #     body: |
-      #       Sync `main` up to upstream release **${{ steps.latest.outputs.tag }}**.
+      #       Sync `upstream-tracking` up to upstream release **${{ steps.latest.outputs.tag }}**.
       #
       #       **Before merging - data-contract check:**
       #       - [ ] navbar - still `currentPage` (not `is_active`)?
@@ -87,5 +92,5 @@ jobs:
       #       - [ ] banner - `title` / `content` / `image.url` / `ctabuttons` / `variantClass` unchanged?
       #       - [ ] Any change to a file we customise? (`navbar.hbs`, `video.hbs`)
       #
-      #       Merging only updates `main`. Live sites are unaffected (they run off a `hpw_vN` tag).
+      #       Merging only updates `upstream-tracking`. Live sites are unaffected (they run off a `hpw_vN` tag).
       #       Our customisations are merged in later, when assembling the release.
